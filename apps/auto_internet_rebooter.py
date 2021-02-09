@@ -18,6 +18,9 @@ from datetime import datetime, time
 #    download_mbps: 50.0
 #    upload_mbps: 3.5
 #    ping_ms: 75
+#  delays:
+#    reboot_delay_s: 30
+#    off_duration_s : 15
 #  schedule:
 #    - "04:00:00"
 #    - "16:00:00"
@@ -27,43 +30,53 @@ from datetime import datetime, time
 #    end_time: "21:30:00"
 #  debug: false
 
+DEFAULT_REBOOT_DELAY_S=30
+DEFAULT_OFF_DURATION_S=15
 
 class AutoInternetRebooter(hass.Hass):
 
   def initialize(self):
-    
+
     self.debug = True;
     self.sensor_download = self.args["internet"]["download"]
     self.sensor_upload = self.args["internet"]["upload"]
     self.sensor_ping = self.args["internet"]["ping"]
     self.switch = self.args["internet"]["switch"]
-    
+
     self.threshold_download = float(self.args["thresholds"]["download_mbps"])
     self.threshold_upload = float(self.args["thresholds"]["upload_mbps"])
     self.threshold_ping = float(self.args["thresholds"]["ping_ms"])
-    
+
     self.schedule = self.args["schedule"]
-    
+
     self.notify = False
-    
+
+    self.reboot_delay_s = DEFAULT_REBOOT_DELAY_S
+    self.off_duration = DEFAULT_OFF_DURATION_S
+
     if "notify" in self.args:
       self.notify = True
       self.alexa = self.args["notify"]["alexa"]
       self.notify_start_time = datetime.strptime(self.args["notify"]["start_time"], '%H:%M:%S').time()
       self.notify_end_time = datetime.strptime(self.args["notify"]["end_time"], '%H:%M:%S').time()
-    
+
+    if "delays" in self.args:
+      self.reboot_delay_s = float(self.args["delays"].get("reboot_delay_s", DEFAULT_REBOOT_DELAY_S))
+      self.off_duration_s = float(self.args["delays"].get("off_duration_s", DEFAULT_OFF_DURATION_S))
+
+
     for schedule in self.schedule:
       time = datetime.strptime(schedule, '%H:%M:%S').time()
       self.run_daily(self.run_speedtest, time)
-    
+
     # we just need to monitor ping as ping has a precision of 3 (20.943 ms)
     # highly unlikely that 2 tests will result in same ping speed
     self.listen_state(self.evaluate_internet_health, self.sensor_ping, attribute = "state")
-    
+
     self.debug_log(f"\n**** INIT - AUTO 'CRAPPY INTERNET' REBOOTER ****\n  D/L  {self.threshold_download}\n  U/L   {self.threshold_upload}\n  PING {self.threshold_ping}")
 
     self.debug = bool(self.args["debug"]) if "debug" in self.args else self.debug
-    
+
 
   def run_speedtest(self, kwargs):
     self.debug_log("INTERNET SPEED TEST IN PROGRESS")
@@ -75,29 +88,29 @@ class AutoInternetRebooter(hass.Hass):
 
 
   def evaluate_internet_health(self, entity, attribute, old, new, kwargs):
-    
+
     speed_download = float(self.get_state(self.sensor_download))
     speed_upload = float(self.get_state(self.sensor_upload))
     speed_ping = float(self.get_state(self.sensor_ping))
-    
+
     d = speed_download < self.threshold_download
     u = speed_upload < self.threshold_upload
     p = speed_ping > self.threshold_ping
-    
+
     if d or u or p:
-      
+
       log = []
       if d: log += [f"D/L {self.threshold_download}|{speed_download}"]
       if u: log += [f"U/L {self.threshold_upload}|{speed_upload}"]
       if p: log += [f"PING {self.threshold_ping}|{speed_ping}"]
       self.debug_log("INTERNET HEALTH ERROR: " + ", ".join(log))
-      self.debug_log("INTERNET POWER CYCLE IN 30 SECS")
-      
+      self.debug_log(f"INTERNET POWER CYCLE IN {self.reboot_delay_s} SECS, OFF FOR {self.off_duration_s} SECS")
+
       if self.notify and self.is_time_okay(self.notify_start_time, self.notify_end_time):
-        self.call_service("notify/alexa_media", data = {"type":"tts", "method":"all"}, target = self.alexa, message = "Your attention please, internet power cycle in 30 seconds!")
-      
-      self.run_in(self.turn_off_switch, 30)
-      self.run_in(self.turn_on_switch, 45)
+        self.call_service("notify/alexa_media", data = {"type":"tts", "method":"all"}, target = self.alexa, message = "Your attention please, internet power cycle in {self.reboot_delay_s} seconds!")
+
+      self.run_in(self.turn_off_switch, self.reboot_delay_s)
+      self.run_in(self.turn_on_switch, self.reboot_delay_s+self.off_duration_s)
     else:
       self.debug_log("INTERNET SPEED TEST IS OK")
 
