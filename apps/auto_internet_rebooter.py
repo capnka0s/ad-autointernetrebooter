@@ -73,7 +73,13 @@ class AutoInternetRebooter(hass.Hass):
     # highly unlikely that 2 tests will result in same ping speed
     self.listen_state(self.evaluate_internet_health, self.sensor_ping, attribute = "state")
 
-    self.debug_log(f"\n**** INIT - AUTO 'CRAPPY INTERNET' REBOOTER ****\n  D/L  {self.threshold_download}\n  U/L   {self.threshold_upload}\n  PING {self.threshold_ping}")
+    self.debug_log(f"\n**** INIT - AUTO 'CRAPPY INTERNET' REBOOTER ****\n"
+                   f"  D/L  {self.threshold_download}\n"
+                   f"  U/L   {self.threshold_upload}\n"
+                   f"  PING {self.threshold_ping}\n"
+                   f"  REBOOT_DELAY {self.reboot_delay_s}\n"
+                   f"  OFF_DURATION {self.off_duration_s}\n"
+                   )
 
     self.debug = bool(self.args["debug"]) if "debug" in self.args else self.debug
 
