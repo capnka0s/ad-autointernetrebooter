@@ -18,6 +18,7 @@ from datetime import datetime, time
 #    download_mbps: 50.0
 #    upload_mbps: 3.5
 #    ping_ms: 75
+#    unavailable_is_error: false
 #  delays:
 #    reboot_delay_s: 30
 #    off_duration_s : 15
@@ -32,10 +33,13 @@ from datetime import datetime, time
 
 DEFAULT_REBOOT_DELAY_S=30
 DEFAULT_OFF_DURATION_S=15
+DEFAULT_UNAVAILABLE_IS_ERROR="false"
 
 class AutoInternetRebooter(hass.Hass):
 
   def initialize(self):
+    self.reboot_delay_s = DEFAULT_REBOOT_DELAY_S
+    self.off_duration = DEFAULT_OFF_DURATION_S
 
     self.debug = True;
     self.sensor_download = self.args["internet"]["download"]
@@ -48,11 +52,10 @@ class AutoInternetRebooter(hass.Hass):
     self.threshold_ping = float(self.args["thresholds"]["ping_ms"])
 
     self.schedule = self.args["schedule"]
+    
+    self.unavailable_is_error = self.args.get('unavailable_is_error', DEFAULT_UNAVAILABLE_IS_ERROR).lower() == 'true'
 
     self.notify = False
-
-    self.reboot_delay_s = DEFAULT_REBOOT_DELAY_S
-    self.off_duration = DEFAULT_OFF_DURATION_S
 
     if "notify" in self.args:
       self.notify = True
@@ -94,21 +97,31 @@ class AutoInternetRebooter(hass.Hass):
 
 
   def evaluate_internet_health(self, entity, attribute, old, new, kwargs):
-
-    speed_download = float(self.get_state(self.sensor_download))
-    speed_upload = float(self.get_state(self.sensor_upload))
-    speed_ping = float(self.get_state(self.sensor_ping))
+    
+    connection_error = self.get_state(self.sensor_download) == 'unavailable'
+    
+    speed_download = 0
+    speed_upload = 0
+    speed_ping = 30000
+    
+    try:
+      speed_download = float(self.get_state(self.sensor_download))
+      speed_upload = float(self.get_state(self.sensor_upload))
+      speed_ping = float(self.get_state(self.sensor_ping))
+    except: pass
 
     d = speed_download < self.threshold_download
     u = speed_upload < self.threshold_upload
     p = speed_ping > self.threshold_ping
+    e = connection_error and self.unavailable_is_error
 
-    if d or u or p:
+    if d or u or p or e:
 
       log = []
       if d: log += [f"D/L {self.threshold_download}|{speed_download}"]
       if u: log += [f"U/L {self.threshold_upload}|{speed_upload}"]
       if p: log += [f"PING {self.threshold_ping}|{speed_ping}"]
+      if e: log += [f"ERROR {self.unavailable_is_error}|{connection_error}"]
       self.debug_log("INTERNET HEALTH ERROR: " + ", ".join(log))
       self.debug_log(f"INTERNET POWER CYCLE IN {self.reboot_delay_s} SECS, OFF FOR {self.off_duration_s} SECS")
 
