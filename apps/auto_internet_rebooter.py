@@ -72,9 +72,10 @@ class AutoInternetRebooter(hass.Hass):
       time = datetime.strptime(schedule, '%H:%M:%S').time()
       self.run_daily(self.run_speedtest, time)
 
-    # we just need to monitor ping as ping has a precision of 3 (20.943 ms)
-    # highly unlikely that 2 tests will result in same ping speed
+    # subscribe to value changes
     self.listen_state(self.evaluate_internet_health, self.sensor_ping, attribute = "state")
+    self.listen_state(self.evaluate_internet_health, self.sensor_download, attribute = "state")
+    self.listen_state(self.evaluate_internet_health, self.sensor_upload, attribute = "state")
 
     self.debug_log(f"\n**** INIT - AUTO 'CRAPPY INTERNET' REBOOTER ****\n"
                    f"  D/L  {self.threshold_download}\n"
@@ -92,17 +93,17 @@ class AutoInternetRebooter(hass.Hass):
     try:
       # in try catch as this seems to be a synchronous call. AppDaemon timesout!
       self.call_service("speedtestdotnet/speedtest")
-    except:
-      pass
+    except Exception as e:
+      self.debug_log(f"ERROR RUNNING SPEED TEST: {e}")
 
 
   def evaluate_internet_health(self, entity, attribute, old, new, kwargs):
     
     connection_error = self.get_state(self.sensor_download) == 'unavailable'
     
-    speed_download = 0
-    speed_upload = 0
-    speed_ping = 30000
+    speed_download = None
+    speed_upload = None
+    speed_ping = None
     
     try:
       speed_download = float(self.get_state(self.sensor_download))
@@ -110,13 +111,12 @@ class AutoInternetRebooter(hass.Hass):
       speed_ping = float(self.get_state(self.sensor_ping))
     except: pass
 
-    d = speed_download < self.threshold_download
-    u = speed_upload < self.threshold_upload
-    p = speed_ping > self.threshold_ping
+    d = speed_download and speed_download < self.threshold_download
+    u = speed_upload and speed_upload < self.threshold_upload
+    p = speed_ping and speed_ping > self.threshold_ping
     e = connection_error and self.unavailable_is_error
 
     if d or u or p or e:
-
       log = []
       if d: log += [f"D/L {self.threshold_download}|{speed_download}"]
       if u: log += [f"U/L {self.threshold_upload}|{speed_upload}"]
