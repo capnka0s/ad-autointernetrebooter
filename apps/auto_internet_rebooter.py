@@ -30,6 +30,7 @@ from datetime import datetime, time
 #    start_time: "08:00:00"
 #    end_time: "21:30:00"
 #  debug: false
+#  dryrun: false
 
 DEFAULT_REBOOT_DELAY_S=30
 DEFAULT_OFF_DURATION_S=15
@@ -42,6 +43,7 @@ class AutoInternetRebooter(hass.Hass):
     self.off_duration = DEFAULT_OFF_DURATION_S
 
     self.debug = True;
+    self.dryrun = False;
     self.sensor_download = self.args["internet"]["download"]
     self.sensor_upload = self.args["internet"]["upload"]
     self.sensor_ping = self.args["internet"]["ping"]
@@ -86,6 +88,7 @@ class AutoInternetRebooter(hass.Hass):
                    )
 
     self.debug = bool(self.args["debug"]) if "debug" in self.args else self.debug
+    self.dryrun = bool(self.args["dryrun"]) if "dryrun" in self.args else self.dryrun
 
 
   def run_speedtest(self, kwargs):
@@ -133,15 +136,21 @@ class AutoInternetRebooter(hass.Hass):
     else:
       self.debug_log("INTERNET SPEED TEST IS OK")
 
+  def call_service_dry_run(self, service_name, entity_id):
+    if not self.dryrun:
+      self.call_service(service_name, entity_id = self.switch)
+    else:
+      self.debug_log(f"DRY RUN: call_service('{service_name}', entity_id={entity_id})")
+
 
   def turn_off_switch(self, kwargs):
     self.debug_log("INTERNET RESET : TURN OFF")
-    self.call_service("switch/turn_off", entity_id = self.switch)
+    self.call_service_dry_run("switch/turn_off", entity_id = self.switch)
 
 
   def turn_on_switch(self, kwargs):
     self.debug_log("INTERNET RESET : TURN ON")
-    self.call_service("switch/turn_on", entity_id = self.switch)
+    self.call_service_dry_run("switch/turn_on", entity_id = self.switch)
 
 
   def is_time_okay(self, start, end):
