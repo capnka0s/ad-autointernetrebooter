@@ -121,9 +121,9 @@ class AutoInternetRebooter(hass.Hass):
 
     if d or u or p or e:
       log = []
-      if d: log += [f"D/L {self.threshold_download}|{speed_download}"]
-      if u: log += [f"U/L {self.threshold_upload}|{speed_upload}"]
-      if p: log += [f"PING {self.threshold_ping}|{speed_ping}"]
+      if d: log += [f"D/L expected: {self.threshold_download} real: {speed_download}"]
+      if u: log += [f"U/L expected: {self.threshold_upload} real: {speed_upload}"]
+      if p: log += [f"PING expected: {self.threshold_ping} real: {speed_ping}"]
       if e: log += [f"ERROR {self.unavailable_is_error}|{connection_error}"]
       self.debug_log("INTERNET HEALTH ERROR: " + ", ".join(log))
       self.debug_log(f"INTERNET POWER CYCLE IN {self.reboot_delay_s} SECS, OFF FOR {self.off_duration_s} SECS")
